@@ -1,0 +1,4 @@
+cell_type,prb_warn_pct,prb_critical_pct,latency_warn_ms,dropped_call_warn_pct
+urban,70,85,50,2.0
+suburban,65,80,60,2.5
+rural,60,75,80,3.0

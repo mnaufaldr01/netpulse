@@ -1,0 +1,28 @@
+version: 2
+
+sources:
+  - name: netpulse
+    schema: public
+    tables:
+      - name: tower_master
+        columns:
+          - name: tower_id
+            tests: [unique, not_null]
+          - name: cell_type
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['urban', 'suburban', 'rural']
+
+      - name: subscriber_master
+        columns:
+          - name: subscriber_id
+            tests: [unique, not_null]
+
+      - name: province_master
+
+  - name: staging_raw
+    schema: staging
+    tables:
+      - name: tower_telemetry_cleaned
+      - name: subscriber_sessions_cleaned

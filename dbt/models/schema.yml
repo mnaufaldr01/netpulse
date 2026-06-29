@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: stg_tower_telemetry
+    columns:
+      - name: tower_id
+        tests: [not_null]
+      - name: event_hour
+        tests: [not_null]
+
+  - name: stg_subscriber_sessions
+    columns:
+      - name: subscriber_id
+        tests: [not_null]
+      - name: tower_id
+        tests: [not_null]
+
+  - name: mart_congestion_events
+    columns:
+      - name: tower_id
+        tests: [not_null]
+      - name: severity
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['WARN', 'CRITICAL']
+
+  - name: mart_hotspot_summary
+    columns:
+      - name: tower_id
+        tests: [unique, not_null]
