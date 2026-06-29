@@ -54,14 +54,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports:
-          - 9000:9000
-
     steps:
       - uses: actions/checkout@v4
 
@@ -75,26 +67,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data --console-address ":9001"
+
       - name: Wait for MinIO
         run: |
-          python - <<'PY'
-          import time
-          import boto3
-          for attempt in range(30):
-              try:
-                  boto3.client(
-                      "s3",
-                      endpoint_url="http://localhost:9000",
-                      aws_access_key_id="minioadmin",
-                      aws_secret_access_key="minioadmin",
-                      region_name="us-east-1",
-                  ).list_buckets()
-                  break
-              except Exception:
-                  time.sleep(2)
-          else:
-              raise SystemExit("MinIO not ready")
-          PY
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live > /dev/null; then
+              echo "MinIO is ready"
+              exit 0
+            fi
+            echo "Waiting for MinIO... ($i/30)"
+            sleep 2
+          done
+          echo "MinIO not ready"
+          docker ps -a || true
+          docker logs minio || true
+          exit 1
 
       - name: Bootstrap database
         run: PYTHONPATH=. python -c "from tests.fixtures.bootstrap_db import bootstrap_database; bootstrap_database()"
