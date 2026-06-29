@@ -61,7 +61,7 @@ pip install -e .
    python scripts/seed_subscriber_master.py
    ```
 
-   By default `TOWER_SAMPLE_SIZE=0` loads **all** Indonesia towers from the OpenCelliD CSV. Set e.g. `TOWER_SAMPLE_SIZE=100` in `.env` for a smaller demo dataset (faster backfill and dashboard).
+   `.env.example` defaults to **portfolio demo** settings (`TOWER_SAMPLE_SIZE=100`, `SUBSCRIBER_COUNT=50000`). Re-seed after changing either value.
 
 6. Run pipeline backfill (keep DAGs **paused** in the Airflow UI until backfill completes).
 
@@ -115,6 +115,23 @@ pip install -e .
 | PostgreSQL | localhost:5433               |
 
 Default Airflow credentials: `airflow` / `airflow`
+
+## Scale assumptions
+
+Portfolio demo settings (`.env.example`): **100 real towers**, **50,000 subscribers**, **35-day backfill**.
+
+| Metric | Demo value | Notes |
+|--------|------------|--------|
+| Tower telemetry rows / day | 2,400 | 100 towers × 24 hourly readings |
+| Subscriber session rows / day | 150,000 | 50,000 subscribers × 3 sessions |
+| Total raw events / day | ~152,000 | Matches resume / PRD narrative |
+| 35-day backfill volume | ~5.3M rows | Acquisition + staging per day; dbt/alerts once at end |
+| Typical backfill time (local) | ~45–90 min | Docker Desktop, demo settings; varies by machine |
+| CI / unit tests | Minimal fixture | [`tests/fixtures/seed_ci.sql`](tests/fixtures/seed_ci.sql) — 3 towers, 2 subscribers |
+
+**Production path (not implemented — documented for scope):** Spark/EMR for large staging transforms, CeleryExecutor for horizontal Airflow workers, incremental dbt models, Postgres table partitioning, and right-sized RDS. See [PRD §13 Limitations](PRD_netpulse.md) and [PHASE2_CLOUD_DEPLOYMENT.md](PHASE2_CLOUD_DEPLOYMENT.md).
+
+To stress-test locally, raise `SUBSCRIBER_COUNT` or set `TOWER_SAMPLE_SIZE=0` (full OpenCelliD slice). Generators are vectorized, but staging Postgres loads and dbt runtime still grow quickly — not recommended for portfolio demos.
 
 ## Testing
 

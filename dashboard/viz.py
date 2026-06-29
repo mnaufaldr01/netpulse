@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Optional
 
@@ -31,13 +32,29 @@ def health_to_rgba(score: Optional[float], alpha: int = 160) -> list[int]:
     return health_to_rgb(score) + [alpha]
 
 
+def tower_health_to_rgba(score: Optional[float], alpha: int = 255) -> list[int]:
+    """Tower map dots — darker health palette at full opacity."""
+    if score is None or pd.isna(score):
+        return [71, 85, 105, alpha]
+    if score >= 70:
+        return [21, 128, 61, alpha]
+    if score >= 40:
+        return [180, 83, 9, alpha]
+    return [185, 28, 28, alpha]
+
+
 MUTED_PROVINCE_FILL = [203, 213, 225, 120]
+PROVINCE_CHOROPLETH_LAYER_ID = "province-choropleth"
+TOWER_LAYER_ID = "tower-scatter"
+TOWER_RADIUS_MIN_PIXELS = 3
+TOWER_RADIUS_MAX_PIXELS = 12
 
 
 def subscriber_radius(count: Optional[float]) -> float:
+    """Meters — clamped on screen via radius_min/max_pixels in the scatter layer."""
     if count is None or pd.isna(count) or count <= 0:
-        return 800.0
-    return float(min(5000, max(500, count * 3)))
+        return 400.0
+    return float(min(2500, max(300, count * 1.5)))
 
 
 def geojson_path() -> Path:
@@ -143,6 +160,79 @@ def _province_name_from_feature(feature: dict[str, Any]) -> Optional[str]:
     return props.get(name_col) if name_col else None
 
 
+def _coords_from_geometry(geometry: dict[str, Any]) -> list[list[float]]:
+    geom_type = geometry.get("type")
+    raw: list[Any] = []
+    if geom_type == "Polygon":
+        raw = geometry.get("coordinates", [])
+    elif geom_type == "MultiPolygon":
+        for polygon in geometry.get("coordinates", []):
+            raw.extend(polygon)
+    coords: list[list[float]] = []
+    for ring in raw:
+        coords.extend(ring)
+    return coords
+
+
+def _view_state_for_province(
+    province_name: str,
+    *,
+    padding: float = 0.12,
+) -> pdk.ViewState:
+    """Fit map view to a province boundary from GeoJSON."""
+    geojson = load_geojson()
+    if geojson is None:
+        return pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0)
+
+    feature = None
+    for candidate in geojson.get("features", []):
+        if _province_name_from_feature(candidate) == province_name:
+            feature = candidate
+            break
+
+    if feature is None:
+        return pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0)
+
+    coords = _coords_from_geometry(feature.get("geometry", {}))
+    if not coords:
+        return pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0)
+
+    lons = [c[0] for c in coords]
+    lats = [c[1] for c in coords]
+    min_lon, max_lon = min(lons), max(lons)
+    min_lat, max_lat = min(lats), max(lats)
+
+    center_lat = (min_lat + max_lat) / 2
+    center_lon = (min_lon + max_lon) / 2
+    lon_span = max(max_lon - min_lon, 0.05) * (1 + padding)
+    lat_span = max(max_lat - min_lat, 0.05) * (1 + padding)
+
+    lon_zoom = math.log2(360 / lon_span) - 0.8
+    lat_zoom = math.log2(170 / lat_span) - 0.8
+    zoom = min(lon_zoom, lat_zoom)
+    zoom += math.log2(max(math.cos(math.radians(center_lat)), 0.2))
+    zoom = max(4.5, min(9.5, zoom))
+
+    return pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=zoom,
+        pitch=0,
+    )
+
+
+def _view_state_for_towers(towers: pd.DataFrame) -> pdk.ViewState:
+    if towers.empty:
+        return pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0)
+    zoom = 11 if len(towers) <= 20 else 10 if len(towers) <= 200 else 9
+    return pdk.ViewState(
+        latitude=float(towers["lat"].mean()),
+        longitude=float(towers["lon"].mean()),
+        zoom=zoom,
+        pitch=0,
+    )
+
+
 def _highlight_selected_province_in_geojson(
     geojson: dict[str, Any],
     selected_province: str,
@@ -190,7 +280,7 @@ def build_province_focus_map(
 
     return pdk.Deck(
         layers=layers,
-        initial_view_state=pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0),
+        initial_view_state=_view_state_for_province(province_name),
         map_style="mapbox://styles/mapbox/light-v9",
         tooltip=MAP_TOOLTIP,
     )
@@ -198,7 +288,7 @@ def build_province_focus_map(
 
 def _add_tower_scatter_layer(layers: list, towers: pd.DataFrame) -> None:
     plot_towers = towers.copy()
-    plot_towers["color"] = plot_towers["health_score"].apply(health_to_rgba)
+    plot_towers["color"] = plot_towers["health_score"].apply(tower_health_to_rgba)
     plot_towers["radius"] = plot_towers["connected_subscribers"].apply(subscriber_radius)
     tooltip_lines = plot_towers.apply(_tower_tooltip_lines, axis=1, result_type="expand")
     plot_towers = pd.concat([plot_towers, tooltip_lines], axis=1)
@@ -206,11 +296,15 @@ def _add_tower_scatter_layer(layers: list, towers: pd.DataFrame) -> None:
         pdk.Layer(
             "ScatterplotLayer",
             data=plot_towers,
+            id=TOWER_LAYER_ID,
             get_position="[lon, lat]",
             get_fill_color="color",
             get_radius="radius",
+            radius_units="meters",
+            radius_min_pixels=TOWER_RADIUS_MIN_PIXELS,
+            radius_max_pixels=TOWER_RADIUS_MAX_PIXELS,
             pickable=True,
-            opacity=0.85,
+            opacity=1.0,
         )
     )
 
@@ -221,17 +315,22 @@ def build_network_map(
     *,
     view_state: Optional[pdk.ViewState] = None,
     tower_filter: Optional[pd.DataFrame] = None,
+    show_towers: bool = True,
+    selected_province: Optional[str] = None,
 ) -> pdk.Deck:
     geojson = load_geojson()
     layers = []
-    towers = tower_filter if tower_filter is not None else tower_df
+    towers = tower_filter if tower_filter is not None else pd.DataFrame()
 
     if geojson is not None:
         enriched = enrich_geojson_with_health(geojson, province_df)
+        if selected_province:
+            enriched = _highlight_selected_province_in_geojson(enriched, selected_province)
         layers.append(
             pdk.Layer(
                 "GeoJsonLayer",
                 data=enriched,
+                id=PROVINCE_CHOROPLETH_LAYER_ID,
                 pickable=True,
                 stroked=True,
                 filled=True,
@@ -241,20 +340,16 @@ def build_network_map(
             )
         )
 
-    if towers is not None and not towers.empty:
+    if show_towers and not towers.empty:
         _add_tower_scatter_layer(layers, towers)
 
     if view_state is None:
-        view_state = pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0)
-    elif towers is not None and not towers.empty and len(towers) <= 50:
-        center_lat = towers["lat"].mean()
-        center_lon = towers["lon"].mean()
-        view_state = pdk.ViewState(
-            latitude=center_lat,
-            longitude=center_lon,
-            zoom=7 if len(towers) <= 20 else 6,
-            pitch=0,
-        )
+        if selected_province:
+            view_state = _view_state_for_province(selected_province)
+        elif show_towers and not towers.empty:
+            view_state = _view_state_for_towers(towers)
+        else:
+            view_state = pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0)
 
     return pdk.Deck(
         layers=layers,
