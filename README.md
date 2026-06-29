@@ -97,27 +97,6 @@ pip install -e .
 
    DAGs use `catchup=False` — historical data is loaded via explicit backfill only, not the scheduler.
 
-### Backfill Scripts
-
-| Script | Purpose |
-|--------|---------|
-| [`scripts/backfill_pipeline.sh`](scripts/backfill_pipeline.sh) | Pauses DAGs, clears stuck runs, backfills all 4 DAGs in order, unpauses |
-| [`scripts/reset_airflow_runs.sh`](scripts/reset_airflow_runs.sh) | Stops scheduler and deletes all `netpulse_*` DAG runs from the Airflow DB |
-
-```bash
-# Full pipeline backfill (35 days) — acquisition/staging per day, dbt+alerts once
-bash scripts/backfill_pipeline.sh 2025-05-25 2025-06-28
-
-# Custom date range
-bash scripts/backfill_pipeline.sh 2025-06-01 2025-06-15
-
-# Reset only (then run backfill manually)
-bash scripts/reset_airflow_runs.sh
-docker compose exec airflow-webserver airflow dags backfill netpulse_acquisition -s 2025-05-25 -e 2025-06-28 -y
-docker compose exec airflow-webserver airflow dags backfill netpulse_staging -s 2025-05-25 -e 2025-06-28 -y
-docker compose exec airflow-webserver bash -c "cd /opt/airflow/dbt && dbt seed --profiles-dir /opt/airflow/dbt && dbt run --profiles-dir /opt/airflow/dbt && dbt test --profiles-dir /opt/airflow/dbt"
-```
-
 7. Run dashboard (on host):
    ```bash
    pip install -e .
