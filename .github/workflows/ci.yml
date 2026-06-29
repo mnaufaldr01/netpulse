@@ -97,7 +97,7 @@ jobs:
           PY
 
       - name: Bootstrap database
-        run: PYTHONPATH=. python -c "from tests.integration.conftest import bootstrap_database; bootstrap_database()"
+        run: PYTHONPATH=. python -c "from tests.fixtures.bootstrap_db import bootstrap_database; bootstrap_database()"
 
       - name: Initialize MinIO bucket
         run: python scripts/init_minio_buckets.py
@@ -136,7 +136,7 @@ jobs:
           pip install dbt-postgres==1.7.14 psycopg2-binary
 
       - name: Bootstrap database
-        run: PYTHONPATH=. python -c "from tests.integration.conftest import bootstrap_database; bootstrap_database()"
+        run: PYTHONPATH=. python -c "from tests.fixtures.bootstrap_db import bootstrap_database; bootstrap_database()"
 
       - name: dbt seed, run, test
         working-directory: dbt
