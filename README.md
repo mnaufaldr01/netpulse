@@ -63,6 +63,8 @@ pip install -e .
 
    By default `TOWER_SAMPLE_SIZE=0` loads **all** Indonesia towers from the OpenCelliD CSV. Set e.g. `TOWER_SAMPLE_SIZE=100` in `.env` for a smaller demo dataset (faster backfill and dashboard).
 
+   Large local runs: `SUBSCRIBER_COUNT=500000` generates ~1.5M session rows per day. Keep the scheduler running during backfill; if tasks fail with heartbeat/OOM errors, lower `SUBSCRIBER_COUNT` (e.g. `50000`) or reduce `TOWER_SAMPLE_SIZE`.
+
 6. Run pipeline backfill (keep DAGs **paused** in the Airflow UI until backfill completes).
 
    Run from a **bash terminal** (Git Bash or WSL on Windows — not PowerShell):

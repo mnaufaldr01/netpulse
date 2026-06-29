@@ -4,6 +4,7 @@ from typing import Optional
 
 import boto3
 import pandas as pd
+import pyarrow.parquet as pq
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 
@@ -44,6 +45,13 @@ def download_parquet(key: str, client: Optional[BaseClient] = None) -> pd.DataFr
     client = client or get_s3_client()
     response = client.get_object(Bucket=settings.s3_bucket, Key=key)
     return pd.read_parquet(io.BytesIO(response["Body"].read()), engine="pyarrow")
+
+
+def parquet_row_count(key: str, client: Optional[BaseClient] = None) -> int:
+    """Read row count from parquet metadata without loading a DataFrame."""
+    client = client or get_s3_client()
+    response = client.get_object(Bucket=settings.s3_bucket, Key=key)
+    return pq.read_metadata(io.BytesIO(response["Body"].read())).num_rows
 
 
 def object_exists(key: str, client: Optional[BaseClient] = None) -> bool:
