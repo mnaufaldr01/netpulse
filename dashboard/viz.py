@@ -64,25 +64,87 @@ def enrich_geojson_with_health(
     if province_df.empty:
         return geojson
 
-    lookup = province_df.set_index("province_name")["avg_health_score"].to_dict()
+    lookup = province_df.set_index("province_name")
     features = []
     for feature in geojson.get("features", []):
         props = dict(feature.get("properties", {}))
         name_col = _province_name_column(props)
         province_name = props.get(name_col) if name_col else None
-        score = lookup.get(province_name)
-        props["health_score"] = float(score) if score is not None and not pd.isna(score) else None
-        props["fill_color"] = health_to_rgba(props["health_score"], alpha=120)
+
+        if province_name and province_name in lookup.index:
+            row = lookup.loc[province_name]
+            health = row["avg_health_score"]
+            tower_count = int(row["tower_count"])
+            avg_prb = row.get("avg_prb_utilization")
+            props["province_name"] = province_name
+            props["tower_count"] = tower_count
+            props["avg_health_score"] = (
+                float(health) if health is not None and not pd.isna(health) else None
+            )
+            props["avg_prb_utilization"] = (
+                float(avg_prb) if avg_prb is not None and not pd.isna(avg_prb) else None
+            )
+            props["health_score"] = props["avg_health_score"]
+            props["fill_color"] = health_to_rgba(props["health_score"], alpha=120)
+            prb_str = (
+                f"{props['avg_prb_utilization']:.1f}%"
+                if props["avg_prb_utilization"] is not None
+                else "—"
+            )
+            health_str = (
+                f"{props['avg_health_score']:.1f}"
+                if props["avg_health_score"] is not None
+                else "—"
+            )
+            props["t_line1"] = f"Province: {province_name}"
+            props["t_line2"] = f"Towers: {tower_count}"
+            props["t_line3"] = f"Avg health: {health_str}"
+            props["t_line4"] = f"Avg PRB: {prb_str}"
+        else:
+            props["health_score"] = None
+            props["fill_color"] = health_to_rgba(None, alpha=80)
+            props["t_line1"] = province_name or "Unknown province"
+            props["t_line2"] = ""
+            props["t_line3"] = ""
+            props["t_line4"] = ""
+
         features.append({**feature, "properties": props})
     return {**geojson, "features": features}
+
+
+def _tower_tooltip_lines(row: pd.Series) -> dict[str, str]:
+    health = row.get("health_score")
+    prb = row.get("avg_prb_utilization")
+    health_str = f"{health:.1f}" if pd.notna(health) else "—"
+    prb_str = f"{prb:.1f}%" if pd.notna(prb) else "—"
+    return {
+        "t_line1": f"Tower: {row['tower_id']}",
+        "t_line2": f"Province: {row.get('province_name', '—')}",
+        "t_line3": f"Health: {health_str}",
+        "t_line4": f"Avg PRB: {prb_str}",
+    }
+
+
+MAP_TOOLTIP = {
+    "html": (
+        "<div style='font-family:sans-serif;font-size:12px;line-height:1.5'>"
+        "<b>{t_line1}</b><br/>{t_line2}<br/>{t_line3}<br/>{t_line4}"
+        "</div>"
+    ),
+    "style": {"color": "white", "backgroundColor": "#1e293b"},
+}
 
 
 def build_network_map(
     tower_df: pd.DataFrame,
     province_df: pd.DataFrame,
+    *,
+    view_state: Optional[pdk.ViewState] = None,
+    tower_filter: Optional[pd.DataFrame] = None,
 ) -> pdk.Deck:
     geojson = load_geojson()
     layers = []
+    towers = tower_filter if tower_filter is not None else tower_df
 
     if geojson is not None:
         enriched = enrich_geojson_with_health(geojson, province_df)
@@ -99,14 +161,16 @@ def build_network_map(
             )
         )
 
-    if not tower_df.empty:
-        towers = tower_df.copy()
-        towers["color"] = towers["health_score"].apply(health_to_rgba)
-        towers["radius"] = towers["connected_subscribers"].apply(subscriber_radius)
+    if towers is not None and not towers.empty:
+        plot_towers = towers.copy()
+        plot_towers["color"] = plot_towers["health_score"].apply(health_to_rgba)
+        plot_towers["radius"] = plot_towers["connected_subscribers"].apply(subscriber_radius)
+        tooltip_lines = plot_towers.apply(_tower_tooltip_lines, axis=1, result_type="expand")
+        plot_towers = pd.concat([plot_towers, tooltip_lines], axis=1)
         layers.append(
             pdk.Layer(
                 "ScatterplotLayer",
-                data=towers,
+                data=plot_towers,
                 get_position="[lon, lat]",
                 get_fill_color="color",
                 get_radius="radius",
@@ -115,19 +179,23 @@ def build_network_map(
             )
         )
 
+    if view_state is None:
+        view_state = pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0)
+    elif towers is not None and not towers.empty and len(towers) <= 50:
+        center_lat = towers["lat"].mean()
+        center_lon = towers["lon"].mean()
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
+            zoom=7 if len(towers) <= 20 else 6,
+            pitch=0,
+        )
+
     return pdk.Deck(
         layers=layers,
-        initial_view_state=pdk.ViewState(
-            latitude=-2.5,
-            longitude=118.0,
-            zoom=4,
-            pitch=0,
-        ),
+        initial_view_state=view_state,
         map_style="mapbox://styles/mapbox/light-v9",
-        tooltip={
-            "html": "<b>{tower_id}</b><br/>Health: {health_score}<br/>PRB: {avg_prb_utilization}",
-            "style": {"color": "white"},
-        },
+        tooltip=MAP_TOOLTIP,
     )
 
 
@@ -174,20 +242,24 @@ def build_prb_line_chart(
 def build_peak_hour_heatmap(heatmap_df: pd.DataFrame) -> go.Figure:
     if heatmap_df.empty:
         fig = go.Figure()
-        fig.update_layout(title="Peak Hour PRB Heatmap (30 days)", height=360)
+        fig.update_layout(title="Peak Hour PRB Heatmap (backfill)", height=360)
         return fig
 
-    pivot = heatmap_df.pivot_table(
+    df = heatmap_df.copy()
+    df["day_of_week"] = df["day_of_week"].astype(int)
+    df["hour_of_day"] = df["hour_of_day"].astype(int)
+
+    pivot = df.pivot_table(
         index="day_of_week",
         columns="hour_of_day",
         values="avg_prb",
         aggfunc="mean",
     )
     pivot = pivot.reindex(range(7))
-    pivot.index = [DOW_LABELS[i] for i in pivot.index]
+    pivot.index = [DOW_LABELS[i] for i in range(7)]
     for hour in range(24):
         if hour not in pivot.columns:
-            pivot[hour] = None
+            pivot[hour] = float("nan")
     pivot = pivot[sorted(pivot.columns)]
 
     fig = go.Figure(
@@ -202,7 +274,7 @@ def build_peak_hour_heatmap(heatmap_df: pd.DataFrame) -> go.Figure:
         )
     )
     fig.update_layout(
-        title="PRB by Hour of Day × Day of Week",
+        title="PRB by Hour of Day × Day of Week (full backfill)",
         xaxis_title="Hour of day",
         yaxis_title="Day of week",
         height=360,

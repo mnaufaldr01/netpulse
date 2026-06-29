@@ -13,6 +13,7 @@ from queries import check_db_connection, get_home_metrics
 st.set_page_config(page_title="netpulse", layout="wide", page_icon="📡")
 
 st.session_state.setdefault("drilldown_tower_id", None)
+st.session_state.setdefault("drilldown_province", None)
 st.session_state.setdefault("map_tower_id", None)
 st.session_state.setdefault("map_province", None)
 
@@ -24,6 +25,7 @@ st.markdown(
 Use the sidebar to navigate:
 - **Network Health Map** — province choropleth and tower health overlay
 - **Hotspot Leaderboard** — ranked towers and provinces
+- **Province Drilldown** — all towers within a selected province
 - **Tower Drilldown** — per-tower metrics and charts
 - **Active Alerts** — operational alert panel
 """

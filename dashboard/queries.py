@@ -97,6 +97,7 @@ def get_province_map_data(window: str = "7d") -> pd.DataFrame:
                 lambda s: int((s.fillna(100) < 40).sum()),
             ),
             avg_health_score=("health_score", "mean"),
+            avg_prb_utilization=("avg_prb_utilization", "mean"),
             total_connected_subscribers=("connected_subscribers", "sum"),
         )
         .reset_index()
@@ -105,6 +106,7 @@ def get_province_map_data(window: str = "7d") -> pd.DataFrame:
         agg["congested_tower_count"] / agg["tower_count"].replace(0, 1) * 100
     ).round(1)
     agg["avg_health_score"] = agg["avg_health_score"].round(1)
+    agg["avg_prb_utilization"] = agg["avg_prb_utilization"].round(1)
     return agg.sort_values("congestion_rate", ascending=False)
 
 
@@ -149,21 +151,106 @@ def get_hotspot_towers(window: str = "7d") -> pd.DataFrame:
     return df
 
 
-def get_province_leaderboard() -> pd.DataFrame:
-    sql = """
+def get_province_leaderboard(window: str = "7d") -> pd.DataFrame:
+    """Aggregate province rankings from hotspot mart (aligned with tower leaderboard)."""
+    freq_col = "congestion_frequency_7d" if window == "7d" else "congestion_frequency_30d"
+    sql = f"""
         SELECT
-            province_name,
-            island_group,
-            tower_count,
-            congested_tower_count,
-            congestion_rate,
-            avg_health_score,
-            total_affected_subscriber_hours_7d AS total_affected_subscriber_hours
-        FROM public_marts.mart_province_summary
-        WHERE congested_tower_count >= 1
-        ORDER BY congestion_rate DESC NULLS LAST
+            tm.province_name,
+            max(tm.island_group) AS island_group,
+            count(distinct tm.tower_id) AS tower_count,
+            count(distinct CASE WHEN h.{freq_col} > 0 THEN tm.tower_id END) AS congested_tower_count,
+            round(
+                count(distinct CASE WHEN h.{freq_col} > 0 THEN tm.tower_id END)::numeric
+                / nullif(count(distinct tm.tower_id), 0) * 100,
+                1
+            ) AS congestion_rate,
+            round(avg(hs.health_score)::numeric, 1) AS avg_health_score,
+            coalesce(sum(CASE WHEN h.{freq_col} > 0 THEN h.total_affected_subscriber_hours END), 0)
+                AS total_affected_subscriber_hours
+        FROM public.tower_master tm
+        LEFT JOIN public_marts.mart_hotspot_summary h ON tm.tower_id = h.tower_id
+        LEFT JOIN public_marts.mart_network_health_snapshot hs ON tm.tower_id = hs.tower_id
+        WHERE tm.province_name IS NOT NULL
+        GROUP BY tm.province_name
+        HAVING count(distinct CASE WHEN h.{freq_col} > 0 THEN tm.tower_id END) >= 1
+        ORDER BY avg(h.{freq_col}) DESC NULLS LAST
     """
     return _read_sql(sql)
+
+
+def get_province_towers(province_name: str, window: str = "7d") -> pd.DataFrame:
+    """All towers in a province with health and congestion metrics."""
+    interval = window_interval(window)
+    sql = f"""
+        WITH latest AS (
+            SELECT max(event_hour) AS max_hour
+            FROM public_staging.stg_tower_telemetry
+        ),
+        windowed AS (
+            SELECT
+                t.tower_id,
+                t.prb_utilization,
+                t.latency_ms,
+                t.dropped_call_rate,
+                t.connected_subscribers
+            FROM public_staging.stg_tower_telemetry t
+            CROSS JOIN latest l
+            WHERE t.is_sensor_fault = false
+              AND t.event_hour >= l.max_hour - interval '{interval}'
+        ),
+        scored AS (
+            SELECT
+                w.tower_id,
+                greatest(0, least(100,
+                    100
+                    - greatest(0, (w.prb_utilization - th.prb_warn_pct) * 1.5)
+                    - (w.latency_ms / 10)
+                    - (w.dropped_call_rate * 10)
+                )) AS health_score,
+                w.connected_subscribers,
+                w.prb_utilization
+            FROM windowed w
+            INNER JOIN public.tower_master tm ON w.tower_id = tm.tower_id
+            INNER JOIN public_staging.tower_thresholds th ON tm.cell_type = th.cell_type
+        )
+        SELECT
+            tm.tower_id,
+            tm.lat,
+            tm.lon,
+            tm.radio,
+            tm.mnc,
+            tm.cell_type,
+            tm.province_name,
+            round(avg(s.health_score)::numeric, 1) AS health_score,
+            max(s.connected_subscribers) AS connected_subscribers,
+            round(avg(s.prb_utilization)::numeric, 1) AS avg_prb_utilization,
+            coalesce(h.congestion_frequency_7d, 0) AS congestion_frequency_7d,
+            coalesce(h.congestion_frequency_30d, 0) AS congestion_frequency_30d,
+            coalesce(h.avg_prb_utilization, 0) AS hotspot_avg_prb
+        FROM public.tower_master tm
+        LEFT JOIN scored s ON tm.tower_id = s.tower_id
+        LEFT JOIN public_marts.mart_hotspot_summary h ON tm.tower_id = h.tower_id
+        WHERE tm.province_name = :province_name
+        GROUP BY
+            tm.tower_id, tm.lat, tm.lon, tm.radio, tm.mnc, tm.cell_type,
+            tm.province_name, h.congestion_frequency_7d, h.congestion_frequency_30d,
+            h.avg_prb_utilization
+        ORDER BY health_score ASC NULLS LAST, tm.tower_id
+    """
+    return _read_sql(sql, {"province_name": province_name})
+
+
+def get_all_provinces() -> list[str]:
+    df = _read_sql(
+        """
+        SELECT DISTINCT province_name
+        FROM public.tower_master
+        WHERE province_name IS NOT NULL
+        ORDER BY province_name
+        """
+    )
+    return df["province_name"].tolist()
 
 
 def get_active_alerts(
@@ -335,22 +422,15 @@ def get_peak_hour_heatmap(tower_id: str) -> pd.DataFrame:
 
 
 def get_peak_hour_prb_by_dow(tower_id: str) -> pd.DataFrame:
-    """Hour x day-of-week PRB for drilldown heatmap."""
+    """Hour x day-of-week PRB for drilldown heatmap (all backfill partitions)."""
     sql = """
-        WITH latest AS (
-            SELECT max(event_hour) AS max_hour
-            FROM public_staging.stg_tower_telemetry
-            WHERE tower_id = :tower_id
-        )
         SELECT
             extract(dow FROM t.event_hour)::int AS day_of_week,
             extract(hour FROM t.event_hour)::int AS hour_of_day,
             avg(t.prb_utilization) AS avg_prb
         FROM public_staging.stg_tower_telemetry t
-        CROSS JOIN latest l
         WHERE t.tower_id = :tower_id
           AND t.is_sensor_fault = false
-          AND t.event_hour >= l.max_hour - interval '30 days'
         GROUP BY 1, 2
         ORDER BY 1, 2
     """

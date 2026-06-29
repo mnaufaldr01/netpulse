@@ -33,7 +33,7 @@ def render_tower_detail(row: pd.Series) -> None:
 
     if st.button("Open tower drilldown", key=f"drill_{row['tower_id']}"):
         st.session_state["drilldown_tower_id"] = row["tower_id"]
-        st.switch_page("pages/3_Tower_Drilldown.py")
+        st.switch_page("pages/4_Tower_Drilldown.py")
 
 
 def render_province_detail(row: pd.Series) -> None:
@@ -45,6 +45,13 @@ def render_province_detail(row: pd.Series) -> None:
     c2.metric("Congested", int(row.get("congested_tower_count", 0)))
     c1.metric("Congestion rate", f"{row.get('congestion_rate', 0):.1f}%")
     c2.metric("Avg health", f"{row.get('avg_health_score', 0):.1f}")
+    prb = row.get("avg_prb_utilization")
+    if pd.notna(prb):
+        st.metric("Avg PRB (window)", f"{prb:.1f}%")
+
+    if st.button("Open province drilldown", key=f"prov_drill_{row.get('province_name', '')}"):
+        st.session_state["drilldown_province"] = row["province_name"]
+        st.switch_page("pages/3_Province_Drilldown.py")
 
 
 def render_selection_placeholder() -> None:
