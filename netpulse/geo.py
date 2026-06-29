@@ -89,11 +89,18 @@ def filter_indonesia_slice(df: pd.DataFrame) -> pd.DataFrame:
     return filtered.sort_values("updated", ascending=False)
 
 
-def sample_towers(df: pd.DataFrame, n: int = None, seed: int = None) -> pd.DataFrame:
-    n = n or settings.tower_sample_size
+def sample_towers(df: pd.DataFrame, n: int | None = None, seed: int | None = None) -> pd.DataFrame:
+    """Return towers to seed. n<=0 or settings.tower_sample_size<=0 uses the full filtered slice."""
+    limit = settings.tower_sample_size if n is None else n
     seed = seed or settings.random_seed
 
-    # Prefer target MNCs and radio diversity
+    deduped = df.drop_duplicates(subset=["radio", "mcc", "net", "area", "cell"]).reset_index(drop=True)
+    if limit is None or limit <= 0:
+        return deduped
+
+    n = limit
+
+    # Prefer target MNCs and radio diversity when sampling a subset
     lte_umts_gsm = []
     for radio in ["LTE", "UMTS", "GSM"]:
         radio_df = df[df["radio"] == radio]
