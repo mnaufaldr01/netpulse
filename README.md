@@ -13,6 +13,24 @@ See [PRD_netpulse.md](PRD_netpulse.md) for full product requirements.
 - OpenCelliD Indonesia slice CSV (MCC 510) from [opencellid.org](https://opencellid.org)
 - Simplified Indonesia province GeoJSON from [chmdznr/indonesia-geojson](https://github.com/chmdznr/indonesia-geojson)
 
+Create and activate a virtual environment, then install dependencies:
+
+```powershell
+# Windows (PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-local.txt
+pip install -e .
+```
+
+```bash
+# macOS / Linux
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-local.txt
+pip install -e .
+```
+
 ### First-Run Setup
 
 1. Copy environment file:
@@ -34,7 +52,7 @@ See [PRD_netpulse.md](PRD_netpulse.md) for full product requirements.
    python scripts/init_minio_buckets.py
    ```
 
-5. Seed reference data:
+5. Seed reference data (with venv activated):
    ```bash
    python scripts/seed_opencellid_local.py
    python scripts/seed_subscriber_master.py
