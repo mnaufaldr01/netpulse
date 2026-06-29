@@ -20,6 +20,20 @@ dependencies = [
     "numpy>=1.26.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "moto[s3]>=5.0",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["netpulse*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "integration: requires live Postgres and/or MinIO",
+]
