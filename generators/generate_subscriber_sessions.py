@@ -79,8 +79,9 @@ def validate(partition_date: date) -> dict:
     from netpulse.storage import download_parquet
     from netpulse.paths import raw_subscriber_sessions_key
 
+    subscriber_count = len(load_subscriber_ids())
     df = download_parquet(raw_subscriber_sessions_key(partition_date))
-    expected = settings.subscriber_count * SESSIONS_PER_SUBSCRIBER
+    expected = subscriber_count * SESSIONS_PER_SUBSCRIBER
     if len(df) < expected * 0.95:
         raise ValueError(f"Expected ~{expected} session rows, got {len(df)}")
     return {"row_count": len(df)}

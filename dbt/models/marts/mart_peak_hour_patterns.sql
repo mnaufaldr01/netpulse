@@ -1,4 +1,8 @@
-with telemetry as (
+with as_of as (
+    select max(partition_date) as as_of_date
+    from {{ ref('stg_tower_telemetry') }}
+),
+telemetry as (
     select
         tower_id,
         extract(hour from event_hour) as hour_of_day,
@@ -6,7 +10,7 @@ with telemetry as (
         event_hour::date as event_date
     from {{ ref('stg_tower_telemetry') }}
     where is_sensor_fault = false
-      and event_hour >= current_date - interval '30 days'
+      and event_hour::date >= (select as_of_date - interval '30 days' from as_of)
 ),
 thresholds as (
     select tm.tower_id, th.prb_warn_pct

@@ -16,7 +16,7 @@ with DAG(
     description="Run dbt seed, staging, marts, and tests",
     schedule_interval="0 3 * * *",
     start_date=PIPELINE_START_DATE,
-    catchup=True,
+    catchup=False,
     tags=["netpulse", "dbt"],
 ) as dag:
 

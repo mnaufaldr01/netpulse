@@ -44,6 +44,8 @@ def find_boundaries_geojson() -> Path:
 
 
 def upsert_tower_master(df):
+    with db_cursor(commit=True) as cur:
+        cur.execute("TRUNCATE tower_master")
     sql = """
         INSERT INTO tower_master (
             tower_id, radio, mcc, mnc, area, cell, lon, lat, range_m,

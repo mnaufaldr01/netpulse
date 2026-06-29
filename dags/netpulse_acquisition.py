@@ -10,7 +10,7 @@ with DAG(
     description="Generate synthetic telemetry and sessions to raw zone",
     schedule_interval="0 1 * * *",
     start_date=PIPELINE_START_DATE,
-    catchup=True,
+    catchup=False,
     tags=["netpulse", "acquisition"],
 ) as dag:
 

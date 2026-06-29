@@ -61,13 +61,62 @@ pip install -e .
    python scripts/seed_subscriber_master.py
    ```
 
-6. Run pipeline backfill (after DAGs are enabled in Airflow UI at http://localhost:8080):
+6. Run pipeline backfill (keep DAGs **paused** in the Airflow UI until backfill completes).
+
+   Run from a **bash terminal** (Git Bash or WSL on Windows — not PowerShell):
+
+   **Reset** (only if you see `RUNNING` conflicts from unpausing DAGs too early):
    ```bash
-   docker compose exec airflow-webserver airflow dags backfill netpulse_acquisition -s 2025-05-25 -e 2025-06-28
-   docker compose exec airflow-webserver airflow dags backfill netpulse_staging -s 2025-05-25 -e 2025-06-28
-   docker compose exec airflow-webserver airflow dags backfill netpulse_dbt -s 2025-05-25 -e 2025-06-28
-   docker compose exec airflow-webserver airflow dags backfill netpulse_alerts -s 2025-05-25 -e 2025-06-28
+   bash scripts/reset_airflow_runs.sh
    ```
+
+   **Backfill all DAGs** (recommended):
+
+   Acquisition and staging backfill per day; **dbt and alerts run once** at the end (they rebuild from all staging data):
+
+   ```bash
+   bash scripts/backfill_pipeline.sh 2025-05-25 2025-06-28
+   ```
+
+   If acquisition + staging already finished and only dbt failed, run these manually:
+
+   ```bash
+   docker compose exec airflow-webserver bash -c "cd /opt/airflow/dbt && dbt seed --profiles-dir /opt/airflow/dbt && dbt run --profiles-dir /opt/airflow/dbt && dbt test --profiles-dir /opt/airflow/dbt"
+   docker compose exec airflow-webserver airflow tasks test netpulse_alerts evaluate_hotspot_alerts 2025-06-28
+   docker compose exec airflow-webserver airflow tasks test netpulse_alerts evaluate_peak_hour_alerts 2025-06-28
+   docker compose exec airflow-webserver airflow tasks test netpulse_alerts evaluate_neighbour_alerts 2025-06-28
+   docker compose exec airflow-webserver airflow tasks test netpulse_alerts expire_resolved_alerts 2025-06-28
+   ```
+
+   **Or backfill acquisition + staging only**, then dbt/alerts manually:
+   ```bash
+   docker compose exec airflow-webserver airflow dags backfill netpulse_acquisition -s 2025-05-25 -e 2025-06-28 -y
+   docker compose exec airflow-webserver airflow dags backfill netpulse_staging -s 2025-05-25 -e 2025-06-28 -y
+   # then dbt + alerts once (see commands above)
+   ```
+
+   DAGs use `catchup=False` — historical data is loaded via explicit backfill only, not the scheduler.
+
+### Backfill Scripts
+
+| Script | Purpose |
+|--------|---------|
+| [`scripts/backfill_pipeline.sh`](scripts/backfill_pipeline.sh) | Pauses DAGs, clears stuck runs, backfills all 4 DAGs in order, unpauses |
+| [`scripts/reset_airflow_runs.sh`](scripts/reset_airflow_runs.sh) | Stops scheduler and deletes all `netpulse_*` DAG runs from the Airflow DB |
+
+```bash
+# Full pipeline backfill (35 days) — acquisition/staging per day, dbt+alerts once
+bash scripts/backfill_pipeline.sh 2025-05-25 2025-06-28
+
+# Custom date range
+bash scripts/backfill_pipeline.sh 2025-06-01 2025-06-15
+
+# Reset only (then run backfill manually)
+bash scripts/reset_airflow_runs.sh
+docker compose exec airflow-webserver airflow dags backfill netpulse_acquisition -s 2025-05-25 -e 2025-06-28 -y
+docker compose exec airflow-webserver airflow dags backfill netpulse_staging -s 2025-05-25 -e 2025-06-28 -y
+docker compose exec airflow-webserver bash -c "cd /opt/airflow/dbt && dbt seed --profiles-dir /opt/airflow/dbt && dbt run --profiles-dir /opt/airflow/dbt && dbt test --profiles-dir /opt/airflow/dbt"
+```
 
 7. Run dashboard (on host):
    ```bash

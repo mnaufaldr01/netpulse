@@ -17,7 +17,7 @@ def evaluate_hotspot_alerts():
                 ROUND(h.congestion_frequency_7d::numeric, 1) || '% over 7 days',
             NOW(),
             'ACTIVE'
-        FROM mart_hotspot_summary h
+        FROM public_marts.mart_hotspot_summary h
         WHERE h.congestion_frequency_7d >= 30
           AND NOT EXISTS (
               SELECT 1 FROM alerts a
@@ -42,7 +42,7 @@ def evaluate_peak_hour_alerts():
             'Tower ' || p.tower_id || ' peak congestion at hour ' || p.hour_of_day,
             NOW(),
             'ACTIVE'
-        FROM mart_peak_hour_patterns p
+        FROM public_marts.mart_peak_hour_patterns p
         WHERE p.congestion_occurrence_rate >= 70
           AND p.days_congested >= 5
           AND NOT EXISTS (
@@ -68,7 +68,7 @@ def evaluate_neighbour_alerts():
             'Spillover detected from congested tower ' || n.source_tower_id,
             NOW(),
             'ACTIVE'
-        FROM mart_neighbour_impact n
+        FROM public_marts.mart_neighbour_impact n
         WHERE n.is_spillover = TRUE
           AND NOT EXISTS (
               SELECT 1 FROM alerts a
@@ -89,7 +89,7 @@ def expire_resolved_alerts():
         WHERE a.status = 'ACTIVE'
           AND a.alert_category = 'HOTSPOT'
           AND NOT EXISTS (
-              SELECT 1 FROM mart_hotspot_summary h
+              SELECT 1 FROM public_marts.mart_hotspot_summary h
               WHERE h.tower_id = a.tower_id
                 AND h.congestion_frequency_7d >= 10
           )

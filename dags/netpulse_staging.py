@@ -12,7 +12,7 @@ with DAG(
     description="Clean raw data and write to staging zone",
     schedule_interval="0 2 * * *",
     start_date=PIPELINE_START_DATE,
-    catchup=True,
+    catchup=False,
     tags=["netpulse", "staging"],
 ) as dag:
 

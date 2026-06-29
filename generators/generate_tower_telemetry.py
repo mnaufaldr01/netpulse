@@ -81,7 +81,8 @@ def run(partition_date: date) -> str:
 
 
 def validate(partition_date: date, expected_towers: int = None) -> dict:
-    expected_towers = expected_towers or settings.tower_sample_size
+    towers = load_towers()
+    expected_towers = expected_towers or len(towers)
     expected_rows = expected_towers * 24
     from netpulse.storage import download_parquet
     from netpulse.paths import raw_tower_telemetry_key

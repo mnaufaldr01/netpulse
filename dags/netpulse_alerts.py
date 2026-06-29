@@ -12,7 +12,7 @@ with DAG(
     description="Evaluate alert rules and write to PostgreSQL alerts table",
     schedule_interval="30 4 * * *",
     start_date=PIPELINE_START_DATE,
-    catchup=True,
+    catchup=False,
     tags=["netpulse", "alerts"],
 ) as dag:
 
