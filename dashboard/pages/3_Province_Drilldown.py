@@ -7,7 +7,7 @@ import _bootstrap  # noqa: F401, E402
 import streamlit as st
 
 from queries import get_all_provinces, get_province_map_data, get_province_towers
-from viz import build_network_map
+from viz import build_province_focus_map
 
 st.set_page_config(page_title="Province Drilldown | netpulse", layout="wide")
 st.title("Province Drilldown")
@@ -52,11 +52,7 @@ try:
         st.stop()
 
     st.subheader(f"Towers in {selected}")
-    deck = build_network_map(
-        towers,
-        province_df,
-        tower_filter=towers,
-    )
+    deck = build_province_focus_map(towers, selected, province_df)
     st.pydeck_chart(deck, use_container_width=True, key=f"prov_map_{selected}_{window}")
 
     freq_col = "congestion_frequency_7d" if window == "7d" else "congestion_frequency_30d"

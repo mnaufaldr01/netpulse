@@ -165,6 +165,7 @@ def get_province_leaderboard(window: str = "7d") -> pd.DataFrame:
                 / nullif(count(distinct tm.tower_id), 0) * 100,
                 1
             ) AS congestion_rate,
+            round(avg(h.{freq_col})::numeric, 1) AS avg_congestion_frequency,
             round(avg(hs.health_score)::numeric, 1) AS avg_health_score,
             coalesce(sum(CASE WHEN h.{freq_col} > 0 THEN h.total_affected_subscriber_hours END), 0)
                 AS total_affected_subscriber_hours

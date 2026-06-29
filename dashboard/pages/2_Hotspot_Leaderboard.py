@@ -77,6 +77,7 @@ try:
                     "rank",
                     "province_name",
                     "island_group",
+                    "avg_congestion_frequency",
                     "tower_count",
                     "congested_tower_count",
                     "congestion_rate",
@@ -85,13 +86,17 @@ try:
                 ]
             ].rename(
                 columns={
+                    "avg_congestion_frequency": "avg_congestion_frequency_pct",
                     "congested_tower_count": "congested_towers",
                     "congestion_rate": "congestion_rate_pct",
                     "total_affected_subscriber_hours": "affected_subscriber_hours",
                 }
             )
 
-            st.caption("Select a row to open province drilldown.")
+            st.caption(
+                "Ranked by avg congestion frequency across towers in the province "
+                f"({window} window). Select a row to open province drilldown."
+            )
 
             prov_selection = st.dataframe(
                 display,

@@ -28,8 +28,10 @@ def health_to_rgb(score: Optional[float]) -> list[int]:
 
 
 def health_to_rgba(score: Optional[float], alpha: int = 160) -> list[int]:
-    rgb = health_to_rgb(score)
-    return rgb + [alpha]
+    return health_to_rgb(score) + [alpha]
+
+
+MUTED_PROVINCE_FILL = [203, 213, 225, 120]
 
 
 def subscriber_radius(count: Optional[float]) -> float:
@@ -135,6 +137,84 @@ MAP_TOOLTIP = {
 }
 
 
+def _province_name_from_feature(feature: dict[str, Any]) -> Optional[str]:
+    props = feature.get("properties", {})
+    name_col = _province_name_column(props)
+    return props.get(name_col) if name_col else None
+
+
+def _highlight_selected_province_in_geojson(
+    geojson: dict[str, Any],
+    selected_province: str,
+) -> dict[str, Any]:
+    """Province drilldown: mute non-selected provinces; health fill only on selected."""
+    features = []
+    for feature in geojson.get("features", []):
+        props = dict(feature.get("properties", {}))
+        name = _province_name_from_feature(feature)
+        if name != selected_province:
+            props["fill_color"] = MUTED_PROVINCE_FILL
+        else:
+            props["t_line1"] = f"Selected: {name}"
+        features.append({**feature, "properties": props})
+    return {**geojson, "features": features}
+
+
+def build_province_focus_map(
+    towers: pd.DataFrame,
+    province_name: str,
+    province_df: pd.DataFrame,
+) -> pdk.Deck:
+    """National map with non-selected provinces muted; selected province shows health color."""
+    layers = []
+    geojson = load_geojson()
+
+    if geojson is not None:
+        enriched = enrich_geojson_with_health(geojson, province_df)
+        enriched = _highlight_selected_province_in_geojson(enriched, province_name)
+        layers.append(
+            pdk.Layer(
+                "GeoJsonLayer",
+                data=enriched,
+                pickable=True,
+                stroked=True,
+                filled=True,
+                get_fill_color="properties.fill_color",
+                get_line_color=[80, 80, 80, 200],
+                line_width_min_pixels=1,
+            )
+        )
+
+    if not towers.empty:
+        _add_tower_scatter_layer(layers, towers)
+
+    return pdk.Deck(
+        layers=layers,
+        initial_view_state=pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0),
+        map_style="mapbox://styles/mapbox/light-v9",
+        tooltip=MAP_TOOLTIP,
+    )
+
+
+def _add_tower_scatter_layer(layers: list, towers: pd.DataFrame) -> None:
+    plot_towers = towers.copy()
+    plot_towers["color"] = plot_towers["health_score"].apply(health_to_rgba)
+    plot_towers["radius"] = plot_towers["connected_subscribers"].apply(subscriber_radius)
+    tooltip_lines = plot_towers.apply(_tower_tooltip_lines, axis=1, result_type="expand")
+    plot_towers = pd.concat([plot_towers, tooltip_lines], axis=1)
+    layers.append(
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=plot_towers,
+            get_position="[lon, lat]",
+            get_fill_color="color",
+            get_radius="radius",
+            pickable=True,
+            opacity=0.85,
+        )
+    )
+
+
 def build_network_map(
     tower_df: pd.DataFrame,
     province_df: pd.DataFrame,
@@ -162,22 +242,7 @@ def build_network_map(
         )
 
     if towers is not None and not towers.empty:
-        plot_towers = towers.copy()
-        plot_towers["color"] = plot_towers["health_score"].apply(health_to_rgba)
-        plot_towers["radius"] = plot_towers["connected_subscribers"].apply(subscriber_radius)
-        tooltip_lines = plot_towers.apply(_tower_tooltip_lines, axis=1, result_type="expand")
-        plot_towers = pd.concat([plot_towers, tooltip_lines], axis=1)
-        layers.append(
-            pdk.Layer(
-                "ScatterplotLayer",
-                data=plot_towers,
-                get_position="[lon, lat]",
-                get_fill_color="color",
-                get_radius="radius",
-                pickable=True,
-                opacity=0.85,
-            )
-        )
+        _add_tower_scatter_layer(layers, towers)
 
     if view_state is None:
         view_state = pdk.ViewState(latitude=-2.5, longitude=118.0, zoom=4, pitch=0)
@@ -271,6 +336,12 @@ def build_peak_hour_heatmap(heatmap_df: pd.DataFrame) -> go.Figure:
             zmin=0,
             zmax=100,
             colorbar=dict(title="PRB %"),
+            hovertemplate=(
+                "Day of week: %{y}<br>"
+                "Hour of day: %{x}<br>"
+                "Avg PRB: %{z:.1f}%"
+                "<extra></extra>"
+            ),
         )
     )
     fig.update_layout(
@@ -295,6 +366,7 @@ def build_hourly_pattern_chart(pattern_df: pd.DataFrame) -> go.Figure:
             y=pattern_df["avg_prb_utilization"],
             name="Avg PRB",
             marker_color="#f97316",
+            hovertemplate="Hour: %{x}<br>Avg PRB: %{y:.1f}%<extra></extra>",
         )
     )
     fig.update_layout(

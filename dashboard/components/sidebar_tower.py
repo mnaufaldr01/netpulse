@@ -52,7 +52,3 @@ def render_province_detail(row: pd.Series) -> None:
     if st.button("Open province drilldown", key=f"prov_drill_{row.get('province_name', '')}"):
         st.session_state["drilldown_province"] = row["province_name"]
         st.switch_page("pages/3_Province_Drilldown.py")
-
-
-def render_selection_placeholder() -> None:
-    st.info("Click a tower dot or province region on the map to see details here.")
