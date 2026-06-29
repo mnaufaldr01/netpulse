@@ -41,6 +41,9 @@ pip install -e .
 2. Place data files (not committed to git):
    - OpenCelliD CSV → `data/opencellid/` (e.g. `510.csv`)
    - Province GeoJSON → `data/boundaries/indonesia_provinces_simplified.geojson`
+     ```bash
+     python scripts/download_boundaries.py
+     ```
 
 3. Start local stack:
    ```bash
@@ -79,7 +82,7 @@ pip install -e .
 | Airflow UI | http://localhost:8080        |
 | MinIO API  | http://localhost:9000        |
 | MinIO Console | http://localhost:9001     |
-| PostgreSQL | localhost:5432               |
+| PostgreSQL | localhost:5433               |
 
 Default Airflow credentials: `airflow` / `airflow`
 

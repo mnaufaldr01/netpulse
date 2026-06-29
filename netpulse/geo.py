@@ -120,7 +120,7 @@ def sample_towers(df: pd.DataFrame, n: int = None, seed: int = None) -> pd.DataF
 def assign_provinces(df: pd.DataFrame, geojson_path) -> pd.DataFrame:
     gdf = gpd.read_file(geojson_path)
     name_col = next(
-        (c for c in ["nama", "name", "NAME_1", "province", "Provinsi"] if c in gdf.columns),
+        (c for c in ["nama", "name", "NAME_1", "PROVINSI", "province", "Provinsi"] if c in gdf.columns),
         gdf.columns[0],
     )
     gdf = gdf[[name_col, "geometry"]].rename(columns={name_col: "province_name"})
