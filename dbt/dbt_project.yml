@@ -1,0 +1,35 @@
+name: netpulse
+version: 1.0.0
+config-version: 2
+profile: netpulse
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+
+target-path: target
+clean-targets:
+  - target
+  - dbt_packages
+
+models:
+  netpulse:
+    staging:
+      +schema: staging
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
+
+seeds:
+  netpulse:
+    tower_thresholds:
+      +schema: staging
+      +column_types:
+        cell_type: varchar
+        prb_warn_pct: float
+        prb_critical_pct: float
+        latency_warn_ms: float
+        dropped_call_warn_pct: float
