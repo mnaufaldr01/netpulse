@@ -105,13 +105,21 @@ def main():
 
     raw = load_opencellid_csv(csv_path)
     filtered = filter_indonesia_slice(raw)
+    print(f"Indonesia slice (MCC 510): {len(filtered)} towers after filter")
+
     sampled = sample_towers(filtered)
+    limit = settings.tower_sample_limit
+    if limit is None:
+        print(f"Seeding all {len(sampled)} towers (TOWER_SAMPLE_SIZE=0)")
+    else:
+        print(f"Seeding {len(sampled)} towers (TOWER_SAMPLE_SIZE={limit})")
+
     with_provinces = assign_provinces(sampled, geojson_path)
     tower_df = build_tower_master_df(with_provinces)
 
     upsert_tower_master(tower_df)
     upsert_province_master(tower_df)
-    validate_tower_master(settings.tower_sample_size)
+    validate_tower_master(len(tower_df))
     print("Tower and province seeding complete.")
 
 

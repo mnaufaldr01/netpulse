@@ -31,10 +31,16 @@ class Settings(BaseSettings):
     boundaries_data_path: Path = Path("./data/boundaries")
 
     # Pipeline constants
-    tower_sample_size: int = 100
+    # 0 = seed all towers in the OpenCelliD Indonesia slice; set e.g. 100 for demo
+    tower_sample_size: int = 0
     random_seed: int = 42
     backfill_days: int = 35
     subscriber_count: int = 50000
+
+    @property
+    def tower_sample_limit(self) -> int | None:
+        """None means use all filtered towers; otherwise cap at this count."""
+        return None if self.tower_sample_size <= 0 else self.tower_sample_size
 
     @property
     def postgres_dsn(self) -> str:
