@@ -116,6 +116,44 @@ pip install -e .
 
 Default Airflow credentials: `airflow` / `airflow`
 
+## Testing
+
+Install dev dependencies:
+
+```powershell
+pip install -r requirements-dev.txt
+```
+
+**Unit tests** (no external services):
+
+```powershell
+pytest -m "not integration"
+```
+
+**Integration tests** (requires Postgres and MinIO):
+
+```powershell
+docker compose up -d postgres minio
+pytest -m integration
+```
+
+Local integration uses port **5433** from `.env`; CI uses **5432** on service containers.
+
+**dbt tests** (requires Postgres with seed data):
+
+```powershell
+docker compose up -d postgres
+psql -h localhost -p 5433 -U netpulse -d netpulse -f sql/init/01_schemas.sql
+psql -h localhost -p 5433 -U netpulse -d netpulse -f sql/init/02_grants.sql
+psql -h localhost -p 5433 -U netpulse -d netpulse -f tests/fixtures/seed_ci.sql
+cd dbt
+dbt seed --profiles-dir .
+dbt run --profiles-dir .
+dbt test --profiles-dir .
+```
+
+CI runs unit, integration, and dbt jobs in parallel via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
 ## Phase 2: Cloud Deployment
 
 See [PHASE2_CLOUD_DEPLOYMENT.md](PHASE2_CLOUD_DEPLOYMENT.md).
