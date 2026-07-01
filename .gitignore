@@ -1,5 +1,6 @@
 /data/
 .env
+.env.cloud
 __pycache__/
 *.pyc
 *.pyo
@@ -14,6 +15,7 @@ dbt/logs/
 .terraform/
 *.tfstate
 *.tfstate.*
+terraform.tfvars
 .venv/
 venv/
 *.egg-info/
