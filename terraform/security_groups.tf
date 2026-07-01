@@ -1,6 +1,6 @@
 resource "aws_security_group" "airflow" {
   name        = "${var.project_name}-airflow-sg"
-  description = "Airflow EC2 — egress only, no inbound from internet"
+  description = "Airflow EC2 - egress only, no inbound from internet"
   vpc_id      = aws_vpc.netpulse.id
 
   egress {
@@ -17,7 +17,7 @@ resource "aws_security_group" "airflow" {
 
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
-  description = "RDS PostgreSQL — inbound from Airflow EC2 only"
+  description = "RDS PostgreSQL - inbound from Airflow EC2 only"
   vpc_id      = aws_vpc.netpulse.id
 
   ingress {
