@@ -54,12 +54,6 @@ variable "db_username" {
   default = "netpulse"
 }
 
-variable "opencellid_api_key" {
-  type        = string
-  sensitive   = true
-  description = "OpenCelliD API access token (pk.xxx). Pass at apply: -var=opencellid_api_key=..."
-}
-
 variable "git_repo_url" {
   type        = string
   default     = ""

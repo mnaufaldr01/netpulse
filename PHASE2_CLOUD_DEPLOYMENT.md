@@ -73,8 +73,8 @@ All HCL files live in [`terraform/`](terraform/) per PRD Section 8.3.
 
 ## 2. Secrets & Environment Configuration
 
-- [ ] Store RDS password in SSM: `/netpulse/db_password` (SecureString)
-- [ ] Store OpenCelliD API key in SSM: `/netpulse/opencellid_api_key` (SecureString)
+- [ ] Store RDS password in SSM: `/netpulse/db_password` (SecureString, created by Terraform)
+- [ ] Set OpenCelliD API key in `.env.cloud`: `OPENCELLID_API_KEY=pk.xxx` (gitignored — not in Terraform)
 - [ ] Create `.env.cloud` (gitignored) with cloud values:
   - [ ] `POSTGRES_HOST=<rds-endpoint>`
   - [ ] `POSTGRES_PORT=5432`
@@ -84,7 +84,7 @@ All HCL files live in [`terraform/`](terraform/) per PRD Section 8.3.
   - [ ] `AWS_DEFAULT_REGION=<region>`
   - [ ] Remove MinIO-specific vars
 - [ ] Verify [`netpulse/config.py`](netpulse/config.py) reads cloud env without code changes
-- [ ] IAM role on EC2 grants SSM parameter read for DB password and OpenCelliD key
+- [ ] IAM role on EC2 grants SSM parameter read for DB password only
 
 ---
 

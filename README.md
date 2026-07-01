@@ -216,16 +216,14 @@ flowchart TB
 ```bash
 cd terraform
 terraform init
-terraform plan -var="opencellid_api_key=pk.YOUR_TOKEN"
-terraform apply -var="opencellid_api_key=pk.YOUR_TOKEN"
+terraform plan
+terraform apply
 ```
 
 Optional — clone repo onto EC2 at bootstrap:
 
 ```bash
-terraform apply \
-  -var="opencellid_api_key=pk.xxx" \
-  -var="git_repo_url=https://github.com/you/netpulse.git"
+terraform apply -var="git_repo_url=https://github.com/you/netpulse.git"
 ```
 
 If `git_repo_url` is omitted, sync code manually via SSM after apply.
@@ -234,16 +232,18 @@ Capture outputs: `rds_endpoint`, `s3_bucket_name`, `ec2_instance_id`.
 
 ### 2. Secrets and environment
 
-Terraform stores:
+Terraform stores the RDS password in SSM. The OpenCelliD token lives in **`.env.cloud`** (gitignored):
 
-| SSM parameter | Purpose |
-|---------------|---------|
-| `/netpulse/db_password` | RDS password |
-| `/netpulse/opencellid_api_key` | DAG 0 download token |
+| Secret | Where |
+|--------|--------|
+| RDS password | SSM `/netpulse/db_password` (injected at EC2 bootstrap) |
+| OpenCelliD API token | `OPENCELLID_API_KEY` in `.env.cloud` on EC2 |
 
-EC2 bootstrap writes [`/opt/netpulse/.env.cloud`](.env.cloud.example). Copy [`.env.cloud.example`](.env.cloud.example) for reference.
+After bootstrap, edit `/opt/netpulse/.env.cloud` and set `OPENCELLID_API_KEY=pk.your_token`, then restart Airflow:
 
-Cloud vs local: **unset** `S3_ENDPOINT_URL` and AWS static keys — EC2 uses IAM instance profile.
+```bash
+docker compose -f docker-compose.cloud.yml --env-file .env.cloud up -d
+```
 
 ### 3. Access Airflow and RDS
 
@@ -298,7 +298,7 @@ streamlit run dashboard/app.py
 
 ```bash
 cd terraform
-terraform destroy -var="opencellid_api_key=pk.xxx"
+terraform destroy
 ```
 
 S3 bucket has `prevent_destroy` — compute is removed; lake data remains for re-runs.

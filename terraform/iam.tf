@@ -64,7 +64,6 @@ data "aws_iam_policy_document" "ssm_parameter_read" {
 
     resources = [
       aws_ssm_parameter.db_password.arn,
-      aws_ssm_parameter.opencellid_api_key.arn,
     ]
   }
 

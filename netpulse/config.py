@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = None
     aws_default_region: str = "us-east-1"
 
+    # OpenCelliD (cloud DAG 0) — set in .env.cloud; never commit
+    opencellid_api_key: Optional[str] = None
+
     # Local data paths
     opencellid_data_path: Path = Path("./data/opencellid")
     boundaries_data_path: Path = Path("./data/boundaries")

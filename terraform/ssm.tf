@@ -9,10 +9,3 @@ resource "aws_ssm_parameter" "db_password" {
   type        = "SecureString"
   value       = random_password.db_password.result
 }
-
-resource "aws_ssm_parameter" "opencellid_api_key" {
-  name        = "/${var.project_name}/opencellid_api_key"
-  description = "OpenCelliD API access token for DAG 0"
-  type        = "SecureString"
-  value       = var.opencellid_api_key
-}

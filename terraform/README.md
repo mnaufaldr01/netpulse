@@ -9,15 +9,17 @@ See [PHASE2_CLOUD_DEPLOYMENT.md](../PHASE2_CLOUD_DEPLOYMENT.md) and [README.md](
 ```bash
 cd terraform
 terraform init
-terraform plan -var="opencellid_api_key=pk.YOUR_TOKEN"
-terraform apply -var="opencellid_api_key=pk.YOUR_TOKEN"
+terraform plan
+terraform apply
 ```
 
 Optional: clone repo onto EC2 at bootstrap:
 
 ```bash
-terraform apply -var="opencellid_api_key=pk.xxx" -var="git_repo_url=https://github.com/you/netpulse.git"
+terraform apply -var="git_repo_url=https://github.com/you/netpulse.git"
 ```
+
+Set `OPENCELLID_API_KEY` in `/opt/netpulse/.env.cloud` on EC2 before running DAG 0 (not in Terraform).
 
 ## Default region
 
@@ -30,7 +32,7 @@ After apply, capture `rds_endpoint`, `s3_bucket_name`, `ec2_instance_id`, and SS
 ## Teardown
 
 ```bash
-terraform destroy -var="opencellid_api_key=pk.xxx"
+terraform destroy
 ```
 
 S3 bucket has `prevent_destroy` — remove that lifecycle block first if you need to delete the bucket.

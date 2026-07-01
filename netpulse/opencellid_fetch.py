@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import gzip
-import io
-import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -13,7 +11,6 @@ from urllib.request import Request, urlopen
 
 from netpulse.config import settings
 from netpulse.paths import raw_opencellid_key
-from netpulse.ssm import get_parameter
 from netpulse.storage import get_s3_client
 
 OPENCELLID_SSM_PARAM = "/netpulse/opencellid_api_key"
@@ -26,8 +23,20 @@ DOWNLOAD_URL_TEMPLATES = (
 )
 
 
-def get_api_token(parameter_name: str = OPENCELLID_SSM_PARAM) -> str:
-    return get_parameter(parameter_name)
+def get_api_token() -> str:
+    """Resolve OpenCelliD token from env (preferred) or SSM fallback."""
+    if settings.opencellid_api_key:
+        return settings.opencellid_api_key.strip()
+
+    try:
+        from netpulse.ssm import get_parameter
+
+        return get_parameter(OPENCELLID_SSM_PARAM)
+    except Exception as exc:
+        raise RuntimeError(
+            "OpenCelliD API token not configured. Set OPENCELLID_API_KEY in .env.cloud "
+            f"(or {OPENCELLID_SSM_PARAM} in SSM)."
+        ) from exc
 
 
 def _download_bytes(url: str) -> bytes:
