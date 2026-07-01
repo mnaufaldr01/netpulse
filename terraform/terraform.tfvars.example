@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored) if needed:
+#
+# aws_region = "ap-southeast-2"
+# git_repo_url = "https://github.com/you/netpulse.git"
+#
+# OpenCelliD token goes in .env.cloud (OPENCELLID_API_KEY), not Terraform.

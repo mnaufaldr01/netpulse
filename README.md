@@ -173,7 +173,154 @@ CI runs unit, integration, and dbt jobs in parallel via [`.github/workflows/ci.y
 
 ## Phase 2: Cloud Deployment
 
-See [PHASE2_CLOUD_DEPLOYMENT.md](PHASE2_CLOUD_DEPLOYMENT.md).
+Validate the full pipeline on AWS, then tear down compute (~$1 session cost). S3 lake data persists across `terraform destroy`.
+
+**Detailed checklist:** [PHASE2_CLOUD_DEPLOYMENT.md](PHASE2_CLOUD_DEPLOYMENT.md)
+
+### Architecture
+
+```mermaid
+flowchart TB
+  subgraph dev [DevMachine]
+    Streamlit[Streamlit]
+    TF[TerraformCLI]
+  end
+  subgraph aws [AWS]
+    EC2[EC2_Airflow_private]
+    RDS[RDS_Postgres_private]
+    S3[(S3_lake)]
+    SSM[SSM_Parameters]
+  end
+  TF --> aws
+  Streamlit -->|SSM_tunnel_15432| RDS
+  EC2 --> RDS
+  EC2 --> S3
+  EC2 --> SSM
+```
+
+- **VPC** `10.0.0.0/16` — public subnet (NAT only), private subnets (EC2 + RDS)
+- **S3 Gateway Endpoint** — lake traffic bypasses NAT
+- **Access** — SSM Session Manager only (no SSH, no public RDS)
+- **Default region:** `ap-southeast-2` (configurable in [`terraform/variables.tf`](terraform/variables.tf))
+
+### Prerequisites
+
+- Phase 1 complete locally (35-day backfill, dbt tests, dashboard)
+- AWS CLI configured (`aws sts get-caller-identity`)
+- Terraform >= 1.5
+- OpenCelliD API token from [opencellid.org](https://opencellid.org)
+- Billing alerts enabled
+
+### 1. Provision infrastructure
+
+```bash
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+Optional — clone repo onto EC2 at bootstrap:
+
+```bash
+terraform apply -var="git_repo_url=https://github.com/you/netpulse.git"
+```
+
+If `git_repo_url` is omitted, sync code manually via SSM after apply.
+
+Capture outputs: `rds_endpoint`, `s3_bucket_name`, `ec2_instance_id`.
+
+### 2. Secrets and environment
+
+Terraform stores the RDS password in SSM. The OpenCelliD token lives in **`.env.cloud`** (gitignored):
+
+| Secret | Where |
+|--------|--------|
+| RDS password | SSM `/netpulse/db_password` (injected at EC2 bootstrap) |
+| OpenCelliD API token | `OPENCELLID_API_KEY` in `.env.cloud` on EC2 |
+
+After bootstrap, edit `/opt/netpulse/.env.cloud` and set `OPENCELLID_API_KEY=pk.your_token`, then restart Airflow:
+
+```bash
+docker compose -f docker-compose.cloud.yml --env-file .env.cloud up -d
+```
+
+### 3. Access Airflow and RDS
+
+**Airflow UI** (port forward):
+
+```bash
+bash scripts/ssm_port_forward.sh <ec2-id> - airflow
+# http://localhost:8080  (airflow / airflow)
+```
+
+**RDS from laptop** (for Streamlit or psql):
+
+```bash
+bash scripts/ssm_port_forward.sh <ec2-id> <rds-endpoint> rds
+# localhost:15432 -> RDS:5432
+```
+
+### 4. Pipeline on AWS
+
+On EC2 (SSM session) or after bootstrap:
+
+```bash
+cd /opt/netpulse
+
+# DAG 0 — seed 100 towers from OpenCelliD API (manual trigger in UI or CLI)
+docker compose -f docker-compose.cloud.yml --env-file .env.cloud exec airflow-scheduler \
+  airflow dags trigger netpulse_seed_towers
+
+# Subscriber master (one-time)
+docker compose -f docker-compose.cloud.yml --env-file .env.cloud exec airflow-scheduler \
+  python /opt/airflow/scripts/seed_subscriber_master.py
+
+# 35-day backfill (acquisition + staging per day; dbt + alerts once)
+bash scripts/backfill_pipeline_cloud.sh 2025-05-25 2025-06-28
+
+# Validate marts and alerts
+POSTGRES_PASSWORD=<from SSM> bash scripts/validate_cloud_pipeline.sh
+```
+
+### 5. Streamlit against RDS
+
+With RDS tunnel running, see [scripts/STREAMLIT_CLOUD_VALIDATION.md](scripts/STREAMLIT_CLOUD_VALIDATION.md).
+
+```bash
+cp .env.cloud.example .env.cloud
+# Set POSTGRES_HOST=127.0.0.1, POSTGRES_PORT=15432, POSTGRES_PASSWORD from SSM
+python scripts/download_boundaries.py
+streamlit run dashboard/app.py
+```
+
+### 6. Teardown
+
+```bash
+cd terraform
+terraform destroy
+```
+
+S3 bucket has `prevent_destroy` — compute is removed; lake data remains for re-runs.
+
+### Cost profile (approximate)
+
+| Resource | Cost while running |
+|----------|-------------------|
+| NAT Gateway | ~$0.045/hr |
+| EC2 t3.small | ~$0.023/hr |
+| RDS db.t3.micro | ~$0.017/hr |
+| S3 | negligible at demo volume |
+
+Target: destroy within ~3 hours; total session **under $1**.
+
+### Spark / EMR scale-up (documented, not implemented)
+
+At production volume, replace pandas staging transforms with ephemeral EMR PySpark jobs (`EmrCreateJobFlowOperator`). S3 zones, dbt marts, and dashboard remain unchanged — only compute scales. See [PRD §6.3](PRD_netpulse.md).
+
+### Limitations
+
+See [PRD §13](PRD_netpulse.md): synthetic telemetry, heuristic cell classification, single-node Airflow, no dashboard auth, single Terraform environment.
 
 ## Project Structure
 

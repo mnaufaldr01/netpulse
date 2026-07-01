@@ -73,8 +73,8 @@ All HCL files live in [`terraform/`](terraform/) per PRD Section 8.3.
 
 ## 2. Secrets & Environment Configuration
 
-- [ ] Store RDS password in SSM: `/netpulse/db_password` (SecureString)
-- [ ] Store OpenCelliD API key in SSM: `/netpulse/opencellid_api_key` (SecureString)
+- [ ] Store RDS password in SSM: `/netpulse/db_password` (SecureString, created by Terraform)
+- [ ] Set OpenCelliD API key in `.env.cloud`: `OPENCELLID_API_KEY=pk.xxx` (gitignored — not in Terraform)
 - [ ] Create `.env.cloud` (gitignored) with cloud values:
   - [ ] `POSTGRES_HOST=<rds-endpoint>`
   - [ ] `POSTGRES_PORT=5432`
@@ -84,7 +84,7 @@ All HCL files live in [`terraform/`](terraform/) per PRD Section 8.3.
   - [ ] `AWS_DEFAULT_REGION=<region>`
   - [ ] Remove MinIO-specific vars
 - [ ] Verify [`netpulse/config.py`](netpulse/config.py) reads cloud env without code changes
-- [ ] IAM role on EC2 grants SSM parameter read for DB password and OpenCelliD key
+- [ ] IAM role on EC2 grants SSM parameter read for DB password only
 
 ---
 
@@ -140,12 +140,12 @@ No code changes expected — only `.env` swap per PRD Section 11.
 
 ### 5.3 35-Day Backfill
 
-- [ ] `airflow dags backfill netpulse_acquisition -s <start> -e <end>`
-- [ ] `airflow dags backfill netpulse_staging -s <start> -e <end>`
-- [ ] `airflow dags backfill netpulse_dbt -s <start> -e <end>`
-- [ ] `airflow dags backfill netpulse_alerts -s <start> -e <end>`
-- [ ] Monitor Airflow UI for failures; fix and retry failed tasks
-- [ ] Verify S3 raw + staging zones populated for all backfill dates
+Use [`scripts/backfill_pipeline_cloud.sh`](scripts/backfill_pipeline_cloud.sh) on EC2 (same pattern as local):
+
+- [ ] `netpulse_acquisition` + `netpulse_staging` backfill per day (`2025-05-25` → `2025-06-28`)
+- [ ] **dbt + alerts run once** at the end (not per-day backfill)
+- [ ] `bash scripts/backfill_pipeline_cloud.sh 2025-05-25 2025-06-28`
+- [ ] `bash scripts/validate_cloud_pipeline.sh` with RDS credentials
 
 ### 5.4 Data Validation
 
@@ -165,14 +165,17 @@ No code changes expected — only `.env` swap per PRD Section 11.
 
 ## 6. Streamlit Dashboard (Cloud)
 
-- [ ] Update dashboard `.env` to point at RDS endpoint
-- [ ] Ensure GeoJSON path resolves (local file on machine running Streamlit, or copy to dev machine)
+See [scripts/STREAMLIT_CLOUD_VALIDATION.md](scripts/STREAMLIT_CLOUD_VALIDATION.md).
+
+- [ ] SSM tunnel RDS to `localhost:15432`
+- [ ] `.env.cloud` with tunnel host/port
 - [ ] Run `streamlit run dashboard/app.py` against RDS
-- [ ] **Page 1:** pydeck map — towers at real coordinates, province choropleth
-- [ ] **Page 2:** tower + province hotspot leaderboards
-- [ ] **Page 3:** tower drilldown charts and tables
-- [ ] **Page 4:** active alerts panel
-- [ ] Screenshot all four pages for README
+- [ ] **Page 1:** Network Health Map
+- [ ] **Page 2:** Hotspot Leaderboard
+- [ ] **Page 3:** Province Drilldown
+- [ ] **Page 4:** Tower Drilldown
+- [ ] **Page 5:** Active Alerts
+- [ ] Screenshot all pages for README
 
 ---
 

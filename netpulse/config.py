@@ -19,12 +19,15 @@ class Settings(BaseSettings):
     postgres_user: str = "netpulse"
     postgres_password: str = "netpulse_dev"
 
-    # S3 / MinIO
-    s3_endpoint_url: Optional[str] = "http://localhost:9000"
+    # S3 / MinIO — set S3_ENDPOINT_URL for local MinIO; omit in cloud for real AWS S3
+    s3_endpoint_url: Optional[str] = None
     s3_bucket: str = "netpulse-lake"
-    aws_access_key_id: str = "minioadmin"
-    aws_secret_access_key: str = "minioadmin"
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
     aws_default_region: str = "us-east-1"
+
+    # OpenCelliD (cloud DAG 0) — set in .env.cloud; never commit
+    opencellid_api_key: Optional[str] = None
 
     # Local data paths
     opencellid_data_path: Path = Path("./data/opencellid")

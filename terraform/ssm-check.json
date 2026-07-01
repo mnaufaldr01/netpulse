@@ -1,0 +1,8 @@
+﻿{
+  "commands": [
+    "ls -la /opt/netpulse/",
+    "test -f /opt/netpulse/docker-compose.cloud.yml && echo compose-yes || echo compose-no",
+    "grep -i clone /var/log/netpulse-bootstrap.log || true",
+    "docker ps -a"
+  ]
+}
