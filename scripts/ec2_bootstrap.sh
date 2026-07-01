@@ -1,5 +1,10 @@
 #!/bin/bash
 # EC2 user-data bootstrap — rendered by Terraform templatefile()
+
+# Start SSM agent first so Session Manager works even if later bootstrap steps fail
+dnf install -y amazon-ssm-agent 2>/dev/null || true
+systemctl enable --now amazon-ssm-agent 2>/dev/null || true
+
 set -euo pipefail
 exec > /var/log/netpulse-bootstrap.log 2>&1
 

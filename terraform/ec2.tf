@@ -21,6 +21,8 @@ resource "aws_instance" "airflow_host" {
 
   user_data = base64encode(local.bootstrap_script)
 
+  user_data_replace_on_change = true
+
   root_block_device {
     volume_size = 30
     volume_type = "gp3"
